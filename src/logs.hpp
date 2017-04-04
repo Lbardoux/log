@@ -63,11 +63,12 @@ namespace MTL_LOG_NAMESPACE
             MTL_LOG_FRIEND(debug) \
             MTL_LOG_FRIEND(trace)
         
+#       define MTL_LOG_CASE_TAG(foo, id) case id
         class __Header final
         {
             public:
                 __Header(void) = delete;
-                __Header(const std::string& str) : pattern(str)
+                __Header(const char* const str) : pattern(str)
                 {
                     this->build();
                 }
@@ -76,6 +77,10 @@ namespace MTL_LOG_NAMESPACE
                     this->pattern = str;
                     this->build();
                     return *this;
+                }
+                __Header& operator=(const char* const str)
+                {
+                    return *this = std::string(str);
                 }
                 ~__Header(void) = default;
                 operator std::string(void)
@@ -89,7 +94,7 @@ namespace MTL_LOG_NAMESPACE
                     {
                         switch(p.first)
                         {
-                            case -1:
+                            MTL_LOG_CASE_TAG("{DATE}", -1):
                             {
                                 time_t  tt  = time(nullptr);
                                 std::tm ltm = *localtime(&tt);
@@ -98,7 +103,7 @@ namespace MTL_LOG_NAMESPACE
                                 out << ltm.tm_year + 1900;
                                 break;
                             }
-                            case -4:
+                            MTL_LOG_CASE_TAG("{TIME}", -4):
                             {
                                 time_t  tt  = time(nullptr);
                                 std::tm ltm = *localtime(&tt);
@@ -107,12 +112,12 @@ namespace MTL_LOG_NAMESPACE
                                 this->printTwoDigits(out, ltm.tm_sec);
                                 break;
                             }
-                            case -3:
+                            MTL_LOG_CASE_TAG("{THREAD}", -3):
 #                               ifdef MTL_LOG_WITH_THREADS
                                 out << "0x" << std::hex << std::this_thread::get_id() << std::dec;
 #                               endif
                                 break;
-                            case -2:
+                            MTL_LOG_CASE_TAG("{TYPE}", -2):
                                 if (colorEnabled)
                                 {
                                     out << color;
@@ -171,6 +176,9 @@ namespace MTL_LOG_NAMESPACE
                     this->checkAndMergeIfFound("{TIME}",   -4);
                 }
         };
+#       undef MTL_LOG_CASE_TAG
+#       define MTL_LOG_COLOR_CODE(name, code) \
+            static constexpr const char *const name = code
         template<typename T>
         class __Static_declarer
         {
@@ -193,34 +201,35 @@ namespace MTL_LOG_NAMESPACE
 #               ifdef MTL_LOG_WITH_THREADS
                 static std::mutex MUTEX;
 #               endif
-                static constexpr const char *const C_YELLOW = "\033[1;33m";
-                static constexpr const char *const C_RED    = "\033[1;31m";
-                static constexpr const char *const C_GREEN  = "\033[1;32m";
-                static constexpr const char *const C_BLUE   = "\033[1;36m";
-                static constexpr const char *const C_BLANK  = "\033[0m";
+                MTL_LOG_COLOR_CODE(C_YELLOW, "\033[1;33m");
+                MTL_LOG_COLOR_CODE(C_RED   , "\033[1;31m");
+                MTL_LOG_COLOR_CODE(C_GREEN , "\033[1;32m");
+                MTL_LOG_COLOR_CODE(C_BLUE  , "\033[1;36m");
+                MTL_LOG_COLOR_CODE(C_BLANK , "\033[0m");
                 friend class MTL_LOG_NAMESPACE::__details::_Logger;
                 __DETAILS_FRIENDSHIPS
                 __Static_declarer(void) = delete;
         };
-#       define STATIC_DECLARATION(type, name, value) \
+#       define MTL_LOG_STATIC_DECLARATION(type, name, value) \
             template<typename T> type __Static_declarer<T>::name = value;
-        STATIC_DECLARATION(bool,          ENABLE_LOG,        true)
-        STATIC_DECLARATION(bool,          ENABLE_COLOR,      false)
-        STATIC_DECLARATION(bool,          ENABLE_SPACING,    true)
-        STATIC_DECLARATION(bool,          ENABLE_DEBUG,      true)
-        STATIC_DECLARATION(bool,          ENABLE_INFO,       true)
-        STATIC_DECLARATION(bool,          ENABLE_ERROR,      true)
-        STATIC_DECLARATION(bool,          ENABLE_WARNING,    true)
-        STATIC_DECLARATION(bool,          ENABLE_FATAL,      true)
-        STATIC_DECLARATION(bool,          ENABLE_TRACE,      true)
-        STATIC_DECLARATION(bool,          ENABLE_HEADER,     true)
-        STATIC_DECLARATION(std::ostream*, OUT,               &std::cout)
-        STATIC_DECLARATION(bool,          ENABLE_ALPHA_BOOL, true)
+        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_LOG,        true)
+        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_COLOR,      false)
+        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_SPACING,    true)
+        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_DEBUG,      true)
+        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_INFO,       true)
+        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_ERROR,      true)
+        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_WARNING,    true)
+        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_FATAL,      true)
+        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_TRACE,      true)
+        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_HEADER,     true)
+        MTL_LOG_STATIC_DECLARATION(std::ostream*, OUT,               &std::cout)
+        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_ALPHA_BOOL, true)
 #       ifdef MTL_LOG_WITH_THREADS
         template<typename T> std::mutex __Static_declarer<T>::MUTEX;
 #       endif
-        STATIC_DECLARATION(MTL_LOG_NAMESPACE::__details::__Header, FORMAT, std::string("[{TYPE} {DATE} {TIME}] : "))
-#       undef STATIC_DECLARATION
+        MTL_LOG_STATIC_DECLARATION(MTL_LOG_NAMESPACE::__details::__Header, FORMAT, "[{TYPE} {DATE} {TIME}] : ")
+#       undef MTL_LOG_STATIC_DECLARATION
+#       undef MTL_LOG_COLOR_CODE
     }
 #   ifndef MTL_LOG_WITH_THREAD
 #       define MTL_LOG_LOCK \
@@ -230,12 +239,12 @@ namespace MTL_LOG_NAMESPACE
             std::unique_lock<std::mutex> lck(MTL_LOG_NAMESPACE::Options::MUTEX)
 #   endif
 #   define MTL_LOG_GET_SET(type, name, option) \
-        static void enable##name(type value) noexcept\
+        static void enable##name(type value) \
         {\
             MTL_LOG_LOCK;\
             MTL_LOG_NAMESPACE::Options::option = value;\
         }\
-        static type is##name##Enabled(void) noexcept\
+        static type is##name##Enabled(void) \
         {\
             MTL_LOG_LOCK;\
             return MTL_LOG_NAMESPACE::Options::option;\
@@ -400,7 +409,7 @@ namespace MTL_LOG_NAMESPACE
                 MTL_LOG_DUMP_LINE(dump, "ENABLE_DEBUG:bool      = 1");
                 MTL_LOG_DUMP_LINE(dump, "ENABLE_TRACE:bool      = 1");
                 MTL_LOG_DUMP_LINE(dump, "ENABLE_HEADER:bool     = 1");
-                MTL_LOG_DUMP_LINE(dump, "HEADER_FORMAT:string   =[{TYPE} {DATE}] : ");
+                MTL_LOG_DUMP_LINE(dump, "HEADER_FORMAT:string   =[{TYPE} {DATE} {TIME}] : ");
                 dump.close();
             }
             return false;

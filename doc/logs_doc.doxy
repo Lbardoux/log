@@ -282,6 +282,12 @@
  * @def MTL_LOG_LOCK
  * To lock every action with threads enabled.
  * 
+ * @def MTL_LOG_COLOR_CODE
+ * Defines a color for the wrapping.
+ * 
+ * @def MTL_LOG_CASE_TAG
+ * A special macro for a switch's case, in order to wrap it later.
+ * 
  * @def MTL_LOG_DECLARE
  * Wraps the log type method definition into a macro.
  * To use it, simply put :
@@ -310,7 +316,7 @@
  * @fn mlog::__details::__Header::__Header(void)
  * Deleted because you can't use a default constructed __Header.
  * 
- * @fn mlog::__details::__Header::__Header(const std::string& str)
+ * @fn mlog::__details::__Header::__Header(const char* const str)
  * Builds up a valid header by parsing @b str.
  * @param[in] str The string format to parse.
  * Within @b str you could use :
@@ -319,6 +325,14 @@
  *   - {THREAD} To display here the emiter thread number (only if -pthread or -fopenmp).
  * 
  * @fn __Header& mlog::__details::__Header::operator=(const std::string& str)
+ * Builds up a valid header by parsing @b str.
+ * @param[in] str The string format to parse.
+ * Within @b str you could use :
+ *   - {TYPE}   To display here the type of the log.
+ *   - {DATE}   To display here the date of the log.
+ *   - {THREAD} To display here the emiter thread number (only if -pthread or -fopenmp).
+ * 
+ * @fn __Header& mlog::__details::__Header::operator=(const char* const str)
  * Builds up a valid header by parsing @b str.
  * @param[in] str The string format to parse.
  * Within @b str you could use :
@@ -433,7 +447,7 @@
  * @fn mlog::__details::__Static_declarer::__Static_declarer(void)
  * Because instanciate this class is senseless.
  * 
- * @def STATIC_DECLARATION
+ * @def MTL_LOG_STATIC_DECLARATION
  * Because it was tedious to implement manualy static members.
  * It requires a default value !
  * 
