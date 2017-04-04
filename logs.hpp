@@ -1,10 +1,8 @@
 #ifndef MTL_LOGS_HPP_INCLUDED
 #define MTL_LOGS_HPP_INCLUDED
 
-#include <chrono>
 #include <ctime>
 #include <fstream>
-#include <sstream>
 #include <iostream>
 #include <string>
 #include <utility>
@@ -93,7 +91,7 @@ namespace MTL_LOG_NAMESPACE
                         {
                             case -1:
                             {
-                                time_t  tt  = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+                                time_t  tt  = time(nullptr);
                                 std::tm ltm = *localtime(&tt);
                                 this->printTwoDigits(out, ltm.tm_mon+1) << '/';
                                 this->printTwoDigits(out, ltm.tm_mday)  << '/';
@@ -102,7 +100,7 @@ namespace MTL_LOG_NAMESPACE
                             }
                             case -4:
                             {
-                                time_t  tt  = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+                                time_t  tt  = time(nullptr);
                                 std::tm ltm = *localtime(&tt);
                                 this->printTwoDigits(out, ltm.tm_hour) << ':';
                                 this->printTwoDigits(out, ltm.tm_min) << ':';
