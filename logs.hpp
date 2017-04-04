@@ -7,6 +7,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <map>
 
 // if -pthread or -fopenmp provided only
 #ifdef _REENTRANT
@@ -83,8 +84,11 @@ namespace MTL_LOG_NAMESPACE
                     return this->pattern;
                 }
                 void display(std::ostream& out, const std::string& type, const char *const color,
-                             const char *const nocolor, bool colorEnabled)
+                             const char *const nocolor, bool colorEnabled, const void* threads_names)
                 {
+#                   ifdef MTL_LOG_WITH_THREADS
+                    const std::map<std::thread::id, std::string>* thread = reinterpret_cast<const std::map<std::thread::id, std::string>*>(threads_names);
+#                   endif
                     for(const auto& p : this->chunks)
                     {
                         switch(p.first)
@@ -109,7 +113,14 @@ namespace MTL_LOG_NAMESPACE
                             }
                             case -3:
 #                               ifdef MTL_LOG_WITH_THREADS
-                                out << "0x" << std::hex << std::this_thread::get_id() << std::dec;
+                                try
+                                {
+                                    out << (*thread).at(std::this_thread::get_id());
+                                }
+                                catch (const std::out_of_range&)
+                                {
+                                    out << "0x" << std::hex << std::this_thread::get_id() << std::dec;
+                                }
 #                               endif
                                 break;
                             case -2:
@@ -189,6 +200,9 @@ namespace MTL_LOG_NAMESPACE
                 static bool                                   ENABLE_ALPHA_BOOL;
                 static MTL_LOG_NAMESPACE::__details::__Header FORMAT;
                 
+#               ifdef MTL_LOG_WITH_THREADS
+                static std::map<std::thread::id, std::string> THREAD_NAME;
+#               endif
             private:
 #               ifdef MTL_LOG_WITH_THREADS
                 static std::mutex MUTEX;
@@ -218,6 +232,7 @@ namespace MTL_LOG_NAMESPACE
         STATIC_DECLARATION(bool,          ENABLE_ALPHA_BOOL, true)
 #       ifdef MTL_LOG_WITH_THREADS
         template<typename T> std::mutex __Static_declarer<T>::MUTEX;
+        template<typename T> std::map<std::thread::id, std::string> __Static_declarer<T>::THREAD_NAME = {};
 #       endif
         STATIC_DECLARATION(MTL_LOG_NAMESPACE::__details::__Header, FORMAT, std::string("[{TYPE} {DATE} {TIME}] : "))
 #       undef STATIC_DECLARATION
@@ -275,6 +290,21 @@ namespace MTL_LOG_NAMESPACE
                 MTL_LOG_LOCK;
                 return MTL_LOG_NAMESPACE::Options::FORMAT;
             }
+
+            static void bindThreadName(const std::string& name)
+            {
+#               ifdef MTL_LOG_WITH_THREADS
+                MTL_LOG_LOCK;
+                MTL_LOG_NAMESPACE::Options::THREAD_NAME.insert(std::make_pair(std::this_thread::get_id(), name));
+#               endif
+            }
+            static void unbidThreadName()
+            {
+#               ifdef MTL_LOG_WITH_THREADS
+                MTL_LOG_LOCK;
+                MTL_LOG_NAMESPACE::Options::THREAD_NAME.erase(std::this_thread::get_id());
+#               endif
+            }
     };
     
 #   undef MTL_LOG_GET_SET
@@ -327,7 +357,13 @@ namespace MTL_LOG_NAMESPACE
                         MTL_LOG_NAMESPACE::Options::FORMAT.display(*MTL_LOG_NAMESPACE::Options::OUT,
                                                                    tag, color,
                                                                    MTL_LOG_NAMESPACE::Options::C_BLANK,
-                                                                   MTL_LOG_NAMESPACE::Options::isColorEnabled());
+                                                                   MTL_LOG_NAMESPACE::Options::isColorEnabled(),
+#                                                                  ifdef MTL_LOG_WITH_THREADS
+                                                                   &MTL_LOG_NAMESPACE::Options::THREAD_NAME
+#                                                                  else
+                                                                   nullptr
+#                                                                  endif
+                                                                   );
                     }
                     MTL_LOG_NAMESPACE::__details::_Logger::_print_(args...);
                 }
