@@ -1,0 +1,84 @@
+/**
+ * @page id_page_light Lighty logs
+ * @section id_light_syno Synopsis
+ * TODO
+ * 
+ */
+
+/**
+ * @file logs_light.hpp
+ * Another challenge, mimicking perl syntax, and being as lightly as possible.
+ * In order to compile with this header, the only prerequisite is :
+ * @code
+ * -std=c++11
+ * @endcode
+ * Or any further version.@n
+ * If you're curious (or mad) enough to look at the internal part, enable within your doxygen file :
+ * @code
+ * ENABLED_SECTIONS = UNHIDE_THIS_DOXYGEN
+ * @endcode
+ * @date 04/25/2017
+ * @author MTLCRBN
+ * @see https://github.com/Lbardoux/log
+ * @see Doxygen documentation for internal components details (you won't get any here).
+ * @version 2.0
+ * @copyright Copyright 2017 MTLCRBN
+ * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+ *   1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+ *   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+ *   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+ * FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+ * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+/**
+ * @def mlog_info
+ * Display the following arguments, coma separated, with [INFO   ] at the beginning of the line.
+ * @code
+ * mlog_info "const char *const", 'b', 25, "babla";
+ * @endcode
+ * 
+ * @def mlog_warning
+ * Display the following arguments, coma separated, with [WARNING] at the beginning of the line.
+ * @code
+ * mlog_warning "const char *const", 'b', 25, "babla";
+ * @endcode
+ * 
+ * @def mlog_error
+ * Display the following arguments, coma separated, with [ERROR  ] at the beginning of the line.
+ * @code
+ * mlog_error "const char *const", 'b', 25, "babla";
+ * @endcode
+ * 
+ * @def mlog_debug
+ * Display the following arguments, coma separated, with [DEBUG  ] at the beginning of the line.
+ * @code
+ * mlog_debug "const char *const", 'b', 25, "babla";
+ * @endcode
+ * 
+ * @if UNHIDE_THIS_DOXYGEN
+ * 
+ * @class mlog::__details::PerlLogger
+ * Embeds the log application logic. It does everything.
+ * Basicaly, everything is done to avoid raw using.
+ * 
+ * @fn mlog::__details::PerlLogger::PerlLogger(const char* const type)
+ * Write the tag @b type.
+ * 
+ * @fn mlog::__details::PerlLogger::~PerlLogger(void)
+ * Write the newline character and flush the stream.
+ * 
+ * @fn PerlLogger&& mlog::__details::PerlLogger::operator,(const T& t) &&
+ * Write the argument @b t on std::cout, and display a space character.
+ * @param[in] t Something which is outputable on a std::ostream (operator<<).
+ * @return A rvalue on @b *this.
+ * 
+ * @endif
+ */
