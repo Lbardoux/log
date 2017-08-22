@@ -1,6 +1,7 @@
-#ifndef MTL_LOGS_HPP_INCLUDED
-#define MTL_LOGS_HPP_INCLUDED
+#ifndef MTL_MLOG_HPP_INCLUDED
+#define MTL_MLOG_HPP_INCLUDED
 
+// STL
 #include <ctime>
 #include <fstream>
 #include <iostream>
@@ -8,19 +9,28 @@
 #include <utility>
 #include <vector>
 
+
+static_assert(__cplusplus >= 201103L, "C++11 minimum required");
+
+//------------------------------------------------------------------------------
 // if -pthread or -fopenmp provided only
 #ifdef _REENTRANT
 #   define MTL_LOG_WITH_THREADS
-#endif
-#ifdef MTL_LOG_WITH_THREADS
 #   include <thread>
 #   include <mutex>
+#   define MTL_LOG_LOCK std::unique_lock<std::mutex> lck(MTL_LOG_NAMESPACE::Options::MUTEX)
+#else
+#   define MTL_LOG_LOCK do{}while(false)
 #endif
 
+//------------------------------------------------------------------------------
+// It allows user to customize this namespace if it collides with an actual one.
 #ifndef MTL_LOG_NAMESPACE
 #   define MTL_LOG_NAMESPACE mlog
 #endif
 
+//------------------------------------------------------------------------------
+// To export symbols
 #ifndef DECLSPEC
 #   if defined(__WIN32__) || defined(__WINRT__)
 #       define DECLSPEC __declspec(dllexport)
@@ -35,54 +45,115 @@
 #   endif
 #endif
 
-#define MTL_LOG_VARIABLE(varname) #varname " =", varname
-
 namespace MTL_LOG_NAMESPACE
 {
-#   define MTL_LOG_DECLARE(funcName) \
-        template<typename... Args> DECLSPEC void funcName(const Args&... args);
-    MTL_LOG_DECLARE(info)
-    MTL_LOG_DECLARE(warning)
-    MTL_LOG_DECLARE(error)
-    MTL_LOG_DECLARE(fatal)
-    MTL_LOG_DECLARE(debug)
-    MTL_LOG_DECLARE(trace)
+//------------------------------------------------------------------------------
+// Add new methods here (tips : Xmacros)
+#define MTL_FOR_EACH_LOG_FEATURE(macro) \
+    macro(info,    "INFO   ", C_GREEN,  INFO,    Info)\
+    macro(warning, "WARNING", C_YELLOW, WARNING, Warning)\
+    macro(error,   "ERROR  ", C_RED,    ERROR,   Error)\
+    macro(fatal,   "FATAL  ", C_RED,    FATAL,   Fatal)\
+    macro(debug,   "DEBUG  ", C_BLUE,   DEBUG,   Debug)\
+    macro(trace,   "TRACE  ", C_BLUE,   TRACE,   Trace)
+
+//------------------------------------------------------------------------------
+#define MTL_LOG_DECLARE(methodName, b, c, d, e) \
+template<typename... Args> DECLSPEC void methodName(const Args&... args);
+
+//------------------------------------------------------------------------------
+#define MTL_LOG_FRIEND(methodName, b, c, d, e)\
+template<typename... Args> friend void MTL_LOG_NAMESPACE::methodName(const Args&... args);
+
+//------------------------------------------------------------------------------
+#define MTL_LOG_IMPLEMENTATION(methodName, header, color, methodSuffix, e)\
+template<typename... Args>\
+DECLSPEC void methodName(const Args&... args) {\
+    MTL_LOG_LOCK;\
+    if (MTL_LOG_NAMESPACE::Options::ENABLE_LOG && MTL_LOG_NAMESPACE::Options::ENABLE_##methodSuffix) {\
+        MTL_LOG_NAMESPACE::details::printWithHeader(header, MTL_LOG_NAMESPACE::Options::color, args...);\
+    }\
+}
+
+//------------------------------------------------------------------------------
+#define MTL_LOG_IF_IMPLEMENTATION(methodName, b, c, d, e)\
+template<typename... Args>\
+DECLSPEC bool methodName##_if(bool cond, const Args&... args) {\
+    if (cond) {\
+        MTL_LOG_NAMESPACE::methodName(args...);\
+    }\
+    return cond;\
+}
+
+//------------------------------------------------------------------------------
+#define MTL_STATIC_LOG_DECLARACTION(a, b, c, varSuffix, e)\
+static bool ENABLE_##varSuffix;
+
+//------------------------------------------------------------------------------
+#define MTL_STATIC_LOG_ALLOCATION(a, b, c, varSuffix, e)\
+template<typename T> bool MTL_LOG_NAMESPACE::details::StaticDeclarer<T>::ENABLE_##varSuffix = true;
+
+//------------------------------------------------------------------------------
+#define MTL_LOG_GETTER_SETTER(a, b, c, varSuffix, funcSuffix)\
+MTL_LOG_GET_SET(bool, funcSuffix, ENABLE_##varSuffix, is, Enabled, enable)
+
+//------------------------------------------------------------------------------
+#define MTL_LOG_READ_FROM_FILE(a, b, c, d, funcSuffix)\
+MTL_LOG_READ_BOOL(funcSuffix);
+
+//------------------------------------------------------------------------------
+#define MTL_LOG_DUMP_TO_FILE(a, b, c, varSuffix, e)\
+MTL_LOG_DUMP_LINE(dump, ENABLE_##varSuffix = 1);
+
+//------------------------------------------------------------------------------
+#define MTL_LOG_DUMP_LINE(file, text) file << #text << std::endl;
+
+//------------------------------------------------------------------------------
+#define MTL_LOG_READ_BOOL(varname) \
+config >> foo >> equal >> value;\
+MTL_LOG_NAMESPACE::Options::enable##varname(value);
+
+//------------------------------------------------------------------------------
+#define MTL_LOG_CASE_TAG(foo, id) case id
+
+//------------------------------------------------------------------------------
+#define MTL_LOG_GET_SET(type, name, option, prefixGet, suffixGet, prefixSet) \
+static void prefixSet##name(type value) {\
+    MTL_LOG_LOCK;\
+    MTL_LOG_NAMESPACE::Options::option = value;\
+}\
+static type prefixGet##name##suffixGet(void) {\
+    MTL_LOG_LOCK;\
+    return MTL_LOG_NAMESPACE::Options::option;\
+}
+
+    MTL_FOR_EACH_LOG_FEATURE(MTL_LOG_DECLARE)
     inline DECLSPEC bool loadConfiguration(const std::string& fname);
-#   undef MTL_LOG_DECLARE
-    
-    namespace __details
+
+    namespace details
     {
-        class _Logger;
-#       define MTL_LOG_FRIEND(funcName) \
-            template<typename... Args> friend void MTL_LOG_NAMESPACE::funcName(const Args&... args);
-#       define __DETAILS_FRIENDSHIPS \
-            MTL_LOG_FRIEND(info) \
-            MTL_LOG_FRIEND(warning) \
-            MTL_LOG_FRIEND(error) \
-            MTL_LOG_FRIEND(fatal) \
-            MTL_LOG_FRIEND(debug) \
-            MTL_LOG_FRIEND(trace)
-        
-#       define MTL_LOG_CASE_TAG(foo, id) case id
-        class __Header final
+        template<typename... Args>
+        void printWithHeader(const char* const tag, const char* const color, const Args&... args);
+
+        class Header final
         {
             public:
-                __Header(void) = delete;
-                __Header(const char* const str) : pattern(str)
+                Header(void) = delete;
+                ~Header(void) = default;
+                Header(const char* const str) : pattern(str)
                 {
                     this->build();
                 }
-                __Header& operator=(const std::string& str)
+                Header& operator=(const std::string& str)
                 {
                     this->pattern = str;
                     this->build();
                     return *this;
                 }
-                __Header& operator=(const char* const str)
+                Header& operator=(const char* const str)
                 {
                     return *this = std::string(str);
                 }
-                ~__Header(void) = default;
                 operator std::string(void)
                 {
                     return this->pattern;
@@ -113,9 +184,9 @@ namespace MTL_LOG_NAMESPACE
                                 break;
                             }
                             MTL_LOG_CASE_TAG("{THREAD}", -3):
-#                               ifdef MTL_LOG_WITH_THREADS
+#ifdef MTL_LOG_WITH_THREADS
                                 out << "0x" << std::hex << std::this_thread::get_id() << std::dec;
-#                               endif
+#endif
                                 break;
                             MTL_LOG_CASE_TAG("{TYPE}", -2):
                                 if (colorEnabled)
@@ -176,217 +247,124 @@ namespace MTL_LOG_NAMESPACE
                     this->checkAndMergeIfFound("{TIME}",   -4);
                 }
         };
-#       undef MTL_LOG_CASE_TAG
-#       define MTL_LOG_COLOR_CODE(name, code) \
-            static constexpr const char *const name = code
-        template<typename T>
-        class __Static_declarer
+
+
+        template<typename T> class StaticDeclarer
         {
             protected:
-                static bool                                   ENABLE_LOG;
-                static bool                                   ENABLE_COLOR;
-                static bool                                   ENABLE_SPACING;
-                static bool                                   ENABLE_DEBUG;
-                static bool                                   ENABLE_INFO;
-                static bool                                   ENABLE_ERROR;
-                static bool                                   ENABLE_WARNING;
-                static bool                                   ENABLE_FATAL;
-                static bool                                   ENABLE_TRACE;
-                static bool                                   ENABLE_HEADER;
-                static std::ostream*                          OUT;
-                static bool                                   ENABLE_ALPHA_BOOL;
-                static MTL_LOG_NAMESPACE::__details::__Header FORMAT;
-                
+                MTL_FOR_EACH_LOG_FEATURE(MTL_STATIC_LOG_DECLARACTION)
+                static bool ENABLE_COLOR;
+                static bool ENABLE_SPACING;
+                static bool ENABLE_LOG;
+                static bool ENABLE_HEADER;
+                static bool ENABLE_ALPHA_BOOL;
+                static std::ostream* OUT;
+                static MTL_LOG_NAMESPACE::details::Header FORMAT;
+
             private:
-#               ifdef MTL_LOG_WITH_THREADS
+#ifdef MTL_LOG_WITH_THREADS
                 static std::mutex MUTEX;
-#               endif
-                MTL_LOG_COLOR_CODE(C_YELLOW, "\033[1;33m");
-                MTL_LOG_COLOR_CODE(C_RED   , "\033[1;31m");
-                MTL_LOG_COLOR_CODE(C_GREEN , "\033[1;32m");
-                MTL_LOG_COLOR_CODE(C_BLUE  , "\033[1;36m");
-                MTL_LOG_COLOR_CODE(C_BLANK , "\033[0m");
-                friend class MTL_LOG_NAMESPACE::__details::_Logger;
-                __DETAILS_FRIENDSHIPS
-                __Static_declarer(void) = delete;
+#endif
+                static constexpr const char *const C_YELLOW = "\033[1;33m";
+                static constexpr const char *const C_RED    = "\033[1;31m";
+                static constexpr const char *const C_GREEN  = "\033[1;32m";
+                static constexpr const char *const C_BLUE   = "\033[1;36m";
+                static constexpr const char *const C_BLANK  = "\033[0m";
+
+                MTL_FOR_EACH_LOG_FEATURE(MTL_LOG_FRIEND)
+                template<typename... Args>
+                friend void printWithHeader(const char* const tag, const char* const color, const Args&... args);
+
+                StaticDeclarer(void) = delete;
         };
-#       define MTL_LOG_STATIC_DECLARATION(type, name, value) \
-            template<typename T> type __Static_declarer<T>::name = value;
-        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_LOG,        true)
-        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_COLOR,      false)
-        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_SPACING,    true)
-        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_DEBUG,      true)
-        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_INFO,       true)
-        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_ERROR,      true)
-        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_WARNING,    true)
-        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_FATAL,      true)
-        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_TRACE,      true)
-        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_HEADER,     true)
-        MTL_LOG_STATIC_DECLARATION(std::ostream*, OUT,               &std::cout)
-        MTL_LOG_STATIC_DECLARATION(bool,          ENABLE_ALPHA_BOOL, true)
-#       ifdef MTL_LOG_WITH_THREADS
-        template<typename T> std::mutex __Static_declarer<T>::MUTEX;
-#       endif
-        MTL_LOG_STATIC_DECLARATION(MTL_LOG_NAMESPACE::__details::__Header, FORMAT, "[{TYPE} {DATE} {TIME}] : ")
-#       undef MTL_LOG_STATIC_DECLARATION
-#       undef MTL_LOG_COLOR_CODE
+
+        // Static attributes declarations
+        MTL_FOR_EACH_LOG_FEATURE(MTL_STATIC_LOG_ALLOCATION)
+        template<typename T> bool MTL_LOG_NAMESPACE::details::StaticDeclarer<T>::ENABLE_SPACING    = true;
+        template<typename T> bool MTL_LOG_NAMESPACE::details::StaticDeclarer<T>::ENABLE_COLOR      = false;
+        template<typename T> bool MTL_LOG_NAMESPACE::details::StaticDeclarer<T>::ENABLE_LOG        = true;
+        template<typename T> bool MTL_LOG_NAMESPACE::details::StaticDeclarer<T>::ENABLE_HEADER     = true;
+        template<typename T> bool MTL_LOG_NAMESPACE::details::StaticDeclarer<T>::ENABLE_ALPHA_BOOL = true;
+        template<typename T> std::ostream* MTL_LOG_NAMESPACE::details::StaticDeclarer<T>::OUT = &std::cout;
+        template<typename T>
+        MTL_LOG_NAMESPACE::details::Header MTL_LOG_NAMESPACE::details::StaticDeclarer<T>::FORMAT = "[{TYPE} {DATE} {TIME}] :";
+#ifdef MTL_LOG_WITH_THREADS
+        template<typename T> std::mutex MTL_LOG_NAMESPACE::details::StaticDeclarer<T>::MUTEX;
+#endif
     }
-#   ifndef MTL_LOG_WITH_THREAD
-#       define MTL_LOG_LOCK \
-            do{}while(false)
-#   else
-#       define MTL_LOG_LOCK \
-            std::unique_lock<std::mutex> lck(MTL_LOG_NAMESPACE::Options::MUTEX)
-#   endif
-#   define MTL_LOG_GET_SET(type, name, option) \
-        static void enable##name(type value) \
-        {\
-            MTL_LOG_LOCK;\
-            MTL_LOG_NAMESPACE::Options::option = value;\
-        }\
-        static type is##name##Enabled(void) \
-        {\
-            MTL_LOG_LOCK;\
-            return MTL_LOG_NAMESPACE::Options::option;\
-        }
-    class DECLSPEC Options final : public MTL_LOG_NAMESPACE::__details::__Static_declarer<MTL_LOG_NAMESPACE::Options>
+
+    class DECLSPEC Options final : public MTL_LOG_NAMESPACE::details::StaticDeclarer<MTL_LOG_NAMESPACE::Options>
     {
         public:
             Options(void) = delete;
-            MTL_LOG_GET_SET(bool, Log,       ENABLE_LOG)
-            MTL_LOG_GET_SET(bool, Color,     ENABLE_COLOR)
-            MTL_LOG_GET_SET(bool, Spacing,   ENABLE_SPACING)
-            MTL_LOG_GET_SET(bool, AlphaBool, ENABLE_ALPHA_BOOL)
-            MTL_LOG_GET_SET(bool, Debug,     ENABLE_DEBUG)
-            MTL_LOG_GET_SET(bool, Warning,   ENABLE_WARNING)
-            MTL_LOG_GET_SET(bool, Error,     ENABLE_ERROR)
-            MTL_LOG_GET_SET(bool, Fatal,     ENABLE_FATAL)
-            MTL_LOG_GET_SET(bool, Info,      ENABLE_INFO)
-            MTL_LOG_GET_SET(bool, Header,    ENABLE_HEADER)
-            MTL_LOG_GET_SET(bool, Trace,     ENABLE_TRACE)
-            static void setOutputStream(std::ostream* out)
+
+            static void assertValidity(void)
             {
-                MTL_LOG_LOCK;
-                MTL_LOG_NAMESPACE::Options::OUT = out;
+                if (MTL_LOG_NAMESPACE::Options::OUT == nullptr)
+                {
+                    throw std::ios_base::failure("OUT must not be nullptr !");
+                }
+                if (!MTL_LOG_NAMESPACE::Options::OUT->good())
+                {
+                    throw std::ios_base::failure("OUT must be a \"good()\" std::ostream* !");
+                }
             }
-            static std::ostream* getOutputStream(void)
-            {
-                MTL_LOG_LOCK;
-                return MTL_LOG_NAMESPACE::Options::OUT;
-            }
-            static void setFormat(const std::string& format)
-            {
-                MTL_LOG_LOCK;
-                MTL_LOG_NAMESPACE::Options::FORMAT = format;
-            }
-            static std::string getFormat(void)
-            {
-                MTL_LOG_LOCK;
-                return MTL_LOG_NAMESPACE::Options::FORMAT;
-            }
+
+            // is[...]Enabled()
+            // enable[...]
+            MTL_LOG_GET_SET(bool, Log,       ENABLE_LOG,        is, Enabled, enable)
+            MTL_LOG_GET_SET(bool, Color,     ENABLE_COLOR,      is, Enabled, enable)
+            MTL_LOG_GET_SET(bool, Spacing,   ENABLE_SPACING,    is, Enabled, enable)
+            MTL_LOG_GET_SET(bool, AlphaBool, ENABLE_ALPHA_BOOL, is, Enabled, enable)
+            MTL_LOG_GET_SET(bool, Header,    ENABLE_HEADER,     is, Enabled, enable)
+            MTL_FOR_EACH_LOG_FEATURE(MTL_LOG_GETTER_SETTER)
+            // get[...]
+            // set[...]
+            MTL_LOG_GET_SET(std::ostream*, OutputStream, OUT,    get, , set)
+            MTL_LOG_GET_SET(std::string, Format,         FORMAT, get, , set)
     };
-    
-#   undef MTL_LOG_GET_SET
-    namespace __details
+
+    namespace details
     {
-        class _Logger final
+        template<typename... Args>
+        void printWithHeader(const char* const tag, const char* const color, const Args&... args)
         {
-            private:
-                _Logger(void) = delete;
-                __DETAILS_FRIENDSHIPS
-                static void _print_(void)
-                {
-                    *MTL_LOG_NAMESPACE::Options::OUT << std::endl;
-                }
-                template<typename Actual>
-                static void _print_(const Actual& a)
-                {
-                    *MTL_LOG_NAMESPACE::Options::OUT << a << std::endl;
-                }
-                template<typename Actual, typename... Args>
-                static void _print_(const Actual& a, const Args&... args)
-                {
-                    *MTL_LOG_NAMESPACE::Options::OUT << a;
-                    if (MTL_LOG_NAMESPACE::Options::ENABLE_SPACING)
-                    {
-                        *MTL_LOG_NAMESPACE::Options::OUT << ' ';
-                    }
-                    MTL_LOG_NAMESPACE::__details::_Logger::_print_(args...);
-                }
-                static void assertValidity(void)
-                {
-                    if (MTL_LOG_NAMESPACE::Options::OUT == nullptr)
-                    {
-                        throw std::ios_base::failure("OUT must not be nullptr !");
-                    }
-                    if (!MTL_LOG_NAMESPACE::Options::OUT->good())
-                    {
-                        throw std::ios_base::failure("OUT must be a \"good()\" std::ostream* !");
-                    }
-                }
-                template<typename... Args>
-                static void _start_print(const char *const tag, const char *const color, const Args&... args)
-                {
-                    MTL_LOG_LOCK;
-                    MTL_LOG_NAMESPACE::__details::_Logger::assertValidity();
-                    *MTL_LOG_NAMESPACE::Options::OUT << ((MTL_LOG_NAMESPACE::Options::isAlphaBoolEnabled()) ? std::boolalpha
-                                                                                                            : std::noboolalpha);
-                    if (MTL_LOG_NAMESPACE::Options::isHeaderEnabled())
-                    {
-                        MTL_LOG_NAMESPACE::Options::FORMAT.display(*MTL_LOG_NAMESPACE::Options::OUT,
-                                                                   tag, color,
-                                                                   MTL_LOG_NAMESPACE::Options::C_BLANK,
-                                                                   MTL_LOG_NAMESPACE::Options::isColorEnabled());
-                    }
-                    MTL_LOG_NAMESPACE::__details::_Logger::_print_(args...);
-                }
-            
-        };
-    }
-#   define MTL_LOG_METHOD(funcName, type, color, option) \
-        template<typename... Args>\
-        DECLSPEC void funcName(const Args&... args)\
-        {\
-            if (MTL_LOG_NAMESPACE::Options::isLogEnabled() && \
-                MTL_LOG_NAMESPACE::Options::is##option##Enabled())\
-            {\
-                MTL_LOG_NAMESPACE::__details::_Logger::_start_print(type,\
-                                                                    MTL_LOG_NAMESPACE::Options::color,\
-                                                                    args...);\
-            }\
+            MTL_LOG_NAMESPACE::Options::assertValidity();
+            std::ostream& out = *MTL_LOG_NAMESPACE::Options::OUT;
+            bool alphaBool    =  MTL_LOG_NAMESPACE::Options::ENABLE_ALPHA_BOOL;
+
+            out << (alphaBool ? std::boolalpha : std::noboolalpha);
+            if (MTL_LOG_NAMESPACE::Options::ENABLE_HEADER)
+            {
+                MTL_LOG_NAMESPACE::Options::FORMAT.display(out, tag, color,
+                                                           MTL_LOG_NAMESPACE::Options::C_BLANK,
+                                                           MTL_LOG_NAMESPACE::Options::ENABLE_COLOR);
+            }
+
+            auto space = (MTL_LOG_NAMESPACE::Options::ENABLE_SPACING) ? " " : "";
+            auto foo   = {(out << space << args, '\0')...};
+            (void)foo;
+            out << std::endl;
         }
-    MTL_LOG_METHOD(info,    "INFO   ", C_GREEN,  Info)
-    MTL_LOG_METHOD(warning, "WARNING", C_YELLOW, Warning)
-    MTL_LOG_METHOD(error,   "ERROR  ", C_RED,    Error)
-    MTL_LOG_METHOD(fatal,   "FATAL  ", C_RED,    Fatal)
-    MTL_LOG_METHOD(debug,   "DEBUG  ", C_BLUE,   Debug)
-    MTL_LOG_METHOD(trace,   "TRACE  ", C_BLUE,   Trace)
-#   undef MTL_LOG_METHOD
-#   undef MTL_LOG_LOCK
-    
-#   define MTL_LOG_DUMP_LINE(file, text) file << text << std::endl;
-#   define MTL_LOG_READ_BOOL(varname) \
-        config >> foo >> equal >> value;\
-        MTL_LOG_NAMESPACE::Options::enable##varname(value);
+    }
+
+    MTL_FOR_EACH_LOG_FEATURE(MTL_LOG_IMPLEMENTATION)
+    MTL_FOR_EACH_LOG_FEATURE(MTL_LOG_IF_IMPLEMENTATION)
+
     inline DECLSPEC bool loadConfiguration(const std::string& fname)
     {
         std::ifstream config(fname);
-        if (config.good())
+        if (config)
         {
             std::string foo;
-            char        equal;
-            bool        value;
+            char equal;
+            bool value;
             MTL_LOG_READ_BOOL(Log);
             MTL_LOG_READ_BOOL(Color);
             MTL_LOG_READ_BOOL(Spacing);
-            MTL_LOG_READ_BOOL(AlphaBool);
-            MTL_LOG_READ_BOOL(Info);
-            MTL_LOG_READ_BOOL(Warning);
-            MTL_LOG_READ_BOOL(Error);
-            MTL_LOG_READ_BOOL(Fatal);
-            MTL_LOG_READ_BOOL(Debug);
-            MTL_LOG_READ_BOOL(Trace);
             MTL_LOG_READ_BOOL(Header);
+            MTL_LOG_READ_BOOL(AlphaBool);
+            MTL_FOR_EACH_LOG_FEATURE(MTL_LOG_READ_FROM_FILE)
             config >> foo >> equal;
             std::getline(config, foo);
             MTL_LOG_NAMESPACE::Options::setFormat(foo);
@@ -396,29 +374,40 @@ namespace MTL_LOG_NAMESPACE
         else
         {
             std::ofstream dump(fname);
-            if (dump.good())
+            if (dump)
             {
-                MTL_LOG_DUMP_LINE(dump, "ENABLE_LOG:bool        = 1");
-                MTL_LOG_DUMP_LINE(dump, "ENABLE_COLOR:bool      = 0");
-                MTL_LOG_DUMP_LINE(dump, "ENABLE_SPACING:bool    = 1");
-                MTL_LOG_DUMP_LINE(dump, "ENABLE_ALPHA_BOOL:bool = 1");
-                MTL_LOG_DUMP_LINE(dump, "ENABLE_INFO:bool       = 1");
-                MTL_LOG_DUMP_LINE(dump, "ENABLE_WARNING:bool    = 1");
-                MTL_LOG_DUMP_LINE(dump, "ENABLE_ERROR:bool      = 1");
-                MTL_LOG_DUMP_LINE(dump, "ENABLE_FATAL:bool      = 1");
-                MTL_LOG_DUMP_LINE(dump, "ENABLE_DEBUG:bool      = 1");
-                MTL_LOG_DUMP_LINE(dump, "ENABLE_TRACE:bool      = 1");
-                MTL_LOG_DUMP_LINE(dump, "ENABLE_HEADER:bool     = 1");
-                MTL_LOG_DUMP_LINE(dump, "HEADER_FORMAT:string   =[{TYPE} {DATE} {TIME}] : ");
+                MTL_LOG_DUMP_LINE(dump, ENABLE_LOG:bool = 1);
+                MTL_LOG_DUMP_LINE(dump, ENABLE_COLOR:bool = 0);
+                MTL_LOG_DUMP_LINE(dump, ENABLE_SPACING:bool = 1);
+                MTL_LOG_DUMP_LINE(dump, ENABLE_HEADER:bool = 1);
+                MTL_LOG_DUMP_LINE(dump, ENABLE_ALPHA_BOOL:bool = 1);
+                MTL_FOR_EACH_LOG_FEATURE(MTL_LOG_DUMP_TO_FILE)
+                MTL_LOG_DUMP_LINE(dump, HEADER_FORMAT:string =[{TYPE} {DATE} {TIME}] :);
                 dump.close();
             }
             return false;
         }
     }
-#   undef MTL_LOG_DUMP_LINE
-#   undef MTL_LOG_READ_BOOL
-#   undef __DETAILS_FRIENDSHIPS
-#   undef MTL_LOG_FRIEND
-#   undef MTL_LOG_WITH_THREADS
 }
+
+#undef MTL_LOG_LOCK
+#undef MTL_LOG_NAMESPACE
+#undef MTL_FOR_EACH_LOG_FEATURE
+#undef MTL_LOG_DECLARE
+#undef MTL_LOG_FRIEND
+#undef MTL_LOG_IMPLEMENTATION
+#undef MTL_LOG_IF_IMPLEMENTATION
+#undef MTL_STATIC_LOG_DECLARACTION
+#undef MTL_STATIC_LOG_ALLOCATION
+#undef MTL_LOG_GETTER_SETTER
+#undef MTL_LOG_READ_FROM_FILE
+#undef MTL_LOG_DUMP_TO_FILE
+#undef MTL_LOG_DUMP_LINE
+#undef MTL_LOG_READ_BOOL
+#undef MTL_LOG_READ_BOOL
+#undef MTL_LOG_GET_SET
+#ifdef MTL_LOG_WITH_THREADS
+#   undef MTL_LOG_WITH_THREADS
+#endif
+
 #endif
