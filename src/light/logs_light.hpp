@@ -3,7 +3,7 @@
 #ifndef MTL_LIGHT_LOGS_DISABLED
 #include <iostream>
 namespace mlog {
-    namespace __details {
+    namespace details {
         class PerlLogger final {
                 PerlLogger(void)                               = delete;
                 PerlLogger(const PerlLogger& other)            = delete;
